@@ -2,6 +2,12 @@
 // Version: 1.1
 // nananananananananananananananana BATCACHE!!!
 
+// Determine a default inteface, use WP Cache API (classic way of original batcache)
+if ( ! defined( 'BATCACHE_INTERFACE' ) )
+	define('BATCACHE_INTERFACE', 'wp-cache');
+
+// Availables interface : wp-cache, memcached
+
 function batcache_cancel() {
 	global $batcache;
 
@@ -45,15 +51,6 @@ class batcache {
 		return $status_header;
 	}
 
-	function configure_groups() {
-		// Configure the memcached client
-		if ( ! $this->remote )
-			if ( function_exists('wp_cache_add_no_remote_groups') )
-				wp_cache_add_no_remote_groups(array($this->group));
-		if ( function_exists('wp_cache_add_global_groups') )
-			wp_cache_add_global_groups(array($this->group));
-	}
-
 	// Defined here because timer_stop() calls number_format_i18n()
 	function timer_stop($display = 0, $precision = 3) {
 		global $timestart, $timeend;
@@ -74,8 +71,6 @@ class batcache {
 
 		// PHP5 and objects disappearing before output buffers?
 		$this->cache_init();
-
-		// Remember, $wp_object_cache was clobbered in wp-settings.php so we have to repeat this.
 		$this->configure_groups();
 
 		// Do not batcache blank pages (usually they are HTTP redirects)
@@ -121,6 +116,7 @@ class batcache {
 		if ( $this->debug ) {
 			$tag = "<!--\n\tgenerated in " . $cache['timer'] . " seconds\n\t" . strlen(serialize($cache)) . " bytes batcached for " . $this->max_age . " seconds\n-->\n";
 			if ( false !== $tag_position = strpos($output, '</head>') ) {
+
 				$output = substr($output, 0, $tag_position) . $tag . substr($output, $tag_position);
 			}
 		}
@@ -129,55 +125,50 @@ class batcache {
 		return $output;
 	}
 
+	function configure_groups() {
+	}
+
 	function cache_init() {
-		// Note: wp-settings.php calls wp_cache_init() which clobbers the object made here.
-		wp_cache_init();
 	}
 
 	function cache_inclusion() {
-		if ( ! include_once( WP_CONTENT_DIR . '/object-cache.php' ) )
-			return false; // Stop process, no caching
-
-		return true;
 	}
 
 	function cache_exists() {
-		if ( ! is_object( $wp_object_cache ) )
-			return false; // Stop process, no caching
-
-		return true;
 	}
 
 	function is_support_increment() {
-		if ( ! method_exists( $GLOBALS['wp_object_cache'], 'incr' ) )
-			return false;
-
-		return true;
 	}
 
 	function get_cache( $key, $group = '', $force = false, &$found = null ) {
-		return wp_cache_get($key, $group, $force, $found);
 	}
 
 	function set_cache( $key, $data, $group = '', $expire = 0 ) {
-		return wp_cache_set($key, $data, $group, $expire);
 	}
 
 	function add_cache( $key, $data, $group = '', $expire = 0 ) {
-		return wp_cache_add($key, $data, $group, $expire);
 	}
 
 	function incr_cache(  $key, $offset = 1, $group = '' ) {
-		return wp_cache_incr( $key, $offset, $group );
 	}
 
 	function delete_cache($key, $group = '') {
-		return wp_cache_delete( $key, $group );
 	}
 }
-global $batcache;
+
 // Pass in the global variable which may be an array of settings to override defaults.
-$batcache = new batcache($batcache);
+global $batcache;
+
+switch( BATCACHE_INTERFACE ) {
+	case 'memcached':
+		break;
+	case 'wp-cache':
+	default :
+		require( dirname(__FILE__) . '/batcache-interfaces/wp-cache-api.php' );
+		$batcache = new batcache_wp_cache($batcache);
+		break;
+}
+
 
 if ( ! defined( 'WP_CONTENT_DIR' ) )
 	return false; // Stop process, no caching

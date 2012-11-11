@@ -48,6 +48,14 @@ Uncomment `$batcache->unique['mobile'] = is_mobile_user_agent();` And add a func
 
 2. Install the [PECL memcached extension](http://pecl.php.net/package/memcache) and [Ryan's Memcached backend 2.0](http://svn.wp-plugins.org/memcached/trunk/). Use the [1.0 branch](http://svn.wp-plugins.org/memcached/branches/1.0/) if you don't have or can't install the PECL extension.
 
+== Changlog ==
+
+* 1.1
+	* Allow batcache work without object cache
+	* Manage 3rdparty interfaces (memcached, APC, xcache)
+* 1.0
+	* Initial version of batcache
+
 == Frequently Asked Questions ==
 
 = Should I use this? =
