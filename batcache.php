@@ -5,11 +5,11 @@ Plugin URI: http://wordpress.org/extend/plugins/batcache/
 Description: This optional plugin improves Batcache.
 Author: Andy Skelton
 Author URI: http://andyskelton.com/
-Version: 1.0
+Version: 1.1
 */
 
 // Do not load if our advanced-cache.php isn't loaded
-if ( ! is_object($batcache) || ! method_exists( $wp_object_cache, 'incr' ) )
+if ( ! is_object($batcache) || ! method_exists( $batcache, 'incr_cache' ) )
 	return;
 
 $batcache->configure_groups();
@@ -39,7 +39,7 @@ function batcache_clear_url($url) {
 	if ( empty($url) )
 		return false;
 	$url_key = md5($url);
-	wp_cache_add("{$url_key}_version", 0, $batcache->group);
-	return wp_cache_incr("{$url_key}_version", 1, $batcache->group);
+	$batcache->add_cache("{$url_key}_version", 0, $batcache->group);
+	return $batcache->incr_cache("{$url_key}_version", 1, $batcache->group);
 }
 

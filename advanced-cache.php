@@ -1,5 +1,5 @@
 <?php
-
+// Version: 1.1
 // nananananananananananananananana BATCACHE!!!
 
 function batcache_cancel() {
@@ -73,7 +73,7 @@ class batcache {
 			return $output;
 
 		// PHP5 and objects disappearing before output buffers?
-		wp_cache_init();
+		$this->cache_init();
 
 		// Remember, $wp_object_cache was clobbered in wp-settings.php so we have to repeat this.
 		$this->configure_groups();
@@ -81,7 +81,7 @@ class batcache {
 		// Do not batcache blank pages (usually they are HTTP redirects)
 		$output = trim($output);
 		if ( empty($output) )
-			return;
+			return false; // Stop process, no caching
 
 		// Construct and save the batcache
 		$cache = array(
@@ -100,10 +100,10 @@ class batcache {
 			}
 		}
 
-		wp_cache_set($this->key, $cache, $this->group, $this->max_age + $this->seconds + 30);
+		$this->set_cache($this->key, $cache, $this->group, $this->max_age + $this->seconds + 30);
 
 		// Unlock regeneration
-		wp_cache_delete("{$this->url_key}_genlock", $this->group);
+		$this->delete_cache("{$this->url_key}_genlock", $this->group);
 
 		if ( $this->cache_control ) {
 			header('Last-Modified: ' . date('r', $cache['time']), true);
@@ -121,7 +121,6 @@ class batcache {
 		if ( $this->debug ) {
 			$tag = "<!--\n\tgenerated in " . $cache['timer'] . " seconds\n\t" . strlen(serialize($cache)) . " bytes batcached for " . $this->max_age . " seconds\n-->\n";
 			if ( false !== $tag_position = strpos($output, '</head>') ) {
-				$tag = "<!--\n\tgenerated in " . $cache['timer'] . " seconds\n\t" . strlen(serialize($cache)) . " bytes batcached for " . $this->max_age . " seconds\n-->\n";
 				$output = substr($output, 0, $tag_position) . $tag . substr($output, $tag_position);
 			}
 		}
@@ -129,13 +128,59 @@ class batcache {
 		// Pass output to next ob handler
 		return $output;
 	}
+
+	function cache_init() {
+		// Note: wp-settings.php calls wp_cache_init() which clobbers the object made here.
+		wp_cache_init();
+	}
+
+	function cache_inclusion() {
+		if ( ! include_once( WP_CONTENT_DIR . '/object-cache.php' ) )
+			return false; // Stop process, no caching
+
+		return true;
+	}
+
+	function cache_exists() {
+		if ( ! is_object( $wp_object_cache ) )
+			return false; // Stop process, no caching
+
+		return true;
+	}
+
+	function is_support_increment() {
+		if ( ! method_exists( $GLOBALS['wp_object_cache'], 'incr' ) )
+			return false;
+
+		return true;
+	}
+
+	function get_cache( $key, $group = '', $force = false, &$found = null ) {
+		return wp_cache_get($key, $group, $force, $found);
+	}
+
+	function set_cache( $key, $data, $group = '', $expire = 0 ) {
+		return wp_cache_set($key, $data, $group, $expire);
+	}
+
+	function add_cache( $key, $data, $group = '', $expire = 0 ) {
+		return wp_cache_add($key, $data, $group, $expire);
+	}
+
+	function incr_cache(  $key, $offset = 1, $group = '' ) {
+		return wp_cache_incr( $key, $offset, $group );
+	}
+
+	function delete_cache($key, $group = '') {
+		return wp_cache_delete( $key, $group );
+	}
 }
 global $batcache;
 // Pass in the global variable which may be an array of settings to override defaults.
 $batcache = new batcache($batcache);
 
 if ( ! defined( 'WP_CONTENT_DIR' ) )
-	return;
+	return false; // Stop process, no caching
 
 // Never batcache interactive scripts or API endpoints.
 if ( in_array(
@@ -145,29 +190,30 @@ if ( in_array(
 			'xmlrpc.php',
 			'ms-files.php',
 		) ) )
-	return;
+	return false; // Stop process, no caching
 
 // Never batcache WP javascript generators
 if ( strstr( $_SERVER['SCRIPT_FILENAME'], 'wp-includes/js' ) )
-	return;
+	return false; // Stop process, no caching
 
 // Never batcache when POST data is present.
 if ( ! empty( $GLOBALS['HTTP_RAW_POST_DATA'] ) || ! empty( $_POST ) )
-	return;
+	return false; // Stop process, no caching
 
 // Never batcache when cookies indicate a cache-exempt visitor.
 if ( is_array( $_COOKIE) && ! empty( $_COOKIE ) )
 	foreach ( array_keys( $_COOKIE ) as $batcache->cookie )
 		if ( $batcache->cookie != 'wordpress_test_cookie' && ( substr( $batcache->cookie, 0, 2 ) == 'wp' || substr( $batcache->cookie, 0, 9 ) == 'wordpress' || substr( $batcache->cookie, 0, 14 ) == 'comment_author' ) )
-			return;
+			return false; // Stop process, no caching
 
-if ( ! include_once( WP_CONTENT_DIR . '/object-cache.php' ) )
-	return;
+if ( !$batcache->cache_inclusion() ) 
+	return false; // Stop process, no caching
 
-wp_cache_init(); // Note: wp-settings.php calls wp_cache_init() which clobbers the object made here.
+$batcache->cache_init();
 
-if ( ! is_object( $wp_object_cache ) )
-	return;
+if ( !$batcache->cache_exists() ) 
+	return false; // Stop process, no caching
+
 
 // Now that the defaults are set, you might want to use different settings under certain conditions.
 
@@ -177,25 +223,25 @@ $batcache->unique['mobile'] = is_mobile_user_agent();
 
 /* Example: never batcache for this host
 if ( $_SERVER['HTTP_HOST'] == 'do-not-batcache-me.com' )
-	return;
+	return false; // Stop process, no caching
 */
 
 /* Example: batcache everything on this host regardless of traffic level
 if ( $_SERVER['HTTP_HOST'] == 'always-batcache-me.com' )
-	return;
+	return false; // Stop process, no caching
 */
 
 /* Example: If you sometimes serve variants dynamically (e.g. referrer search term highlighting) you probably don't want to batcache those variants. Remember this code is run very early in wp-settings.php so plugins are not yet loaded. You will get a fatal error if you try to call an undefined function. Either include your plugin now or define a test function in this file.
 if ( include_once( 'plugins/searchterm-highlighter.php') && referrer_has_search_terms() )
-	return;
+	return false; // Stop process, no caching
 */
 
 // Disabled
 if ( $batcache->max_age < 1 )
-	return;
+	return false; // Stop process, no caching
 
 // Make sure we can increment. If not, turn off the traffic sensor.
-if ( ! method_exists( $GLOBALS['wp_object_cache'], 'incr' ) )
+if ( !$batcache->is_support_increment() )
 	$batcache->times = 0;
 
 // Necessary to prevent clients using cached version after login cookies set. If this is a problem, comment it out and remove all Last-Modified headers.
@@ -220,7 +266,7 @@ $batcache->key = md5(serialize($batcache->keys));
 $batcache->req_key = $batcache->key . '_req';
 
 // Get the batcache
-$batcache->cache = wp_cache_get($batcache->key, $batcache->group);
+$batcache->cache = $batcache->get_cache($batcache->key, $batcache->group);
 
 // Are we only caching frequently-requested pages?
 if ( $batcache->seconds < 1 || $batcache->times < 2 ) {
@@ -228,8 +274,8 @@ if ( $batcache->seconds < 1 || $batcache->times < 2 ) {
 } else {
 	// No batcache item found, or ready to sample traffic again at the end of the batcache life?
 	if ( !is_array($batcache->cache) || time() >= $batcache->cache['time'] + $batcache->max_age - $batcache->seconds ) {
-		wp_cache_add($batcache->req_key, 0, $batcache->group);
-		$batcache->requests = wp_cache_incr($batcache->req_key, 1, $batcache->group);
+		$batcache->add_cache($batcache->req_key, 0, $batcache->group);
+		$batcache->requests = $batcache->incr_cache($batcache->req_key, 1, $batcache->group);
 
 		if ( $batcache->requests >= $batcache->times )
 			$batcache->do = true;
@@ -241,11 +287,11 @@ if ( $batcache->seconds < 1 || $batcache->times < 2 ) {
 // Recreate the permalink from the URL
 $batcache->permalink = 'http://' . $batcache->keys['host'] . $batcache->keys['path'] . ( isset($batcache->keys['query']['p']) ? "?p=" . $batcache->keys['query']['p'] : '' );
 $batcache->url_key = md5($batcache->permalink);
-$batcache->url_version = (int) wp_cache_get("{$batcache->url_key}_version", $batcache->group);
+$batcache->url_version = (int) $batcache->get_cache("{$batcache->url_key}_version", $batcache->group);
 
 // If the document has been updated and we are the first to notice, regenerate it.
 if ( $batcache->do !== false && isset($batcache->cache['version']) && $batcache->cache['version'] < $batcache->url_version )
-	$batcache->genlock = wp_cache_add("{$batcache->url_key}_genlock", 1, $batcache->group);
+	$batcache->genlock = $batcache->add_cache("{$batcache->url_key}_genlock", 1, $batcache->group);
 else $batcache->genlock = 0;
 
 // Did we find a batcached page that hasn't expired?
@@ -292,7 +338,7 @@ if ( isset($batcache->cache['time']) && ! $batcache->genlock && time() < $batcac
 
 // Didn't meet the minimum condition?
 if ( !$batcache->do && !$batcache->genlock )
-	return;
+	return false; // Stop process, no caching
 
 $wp_filter['status_header'][10]['batcache'] = array( 'function' => array(&$batcache, 'status_header'), 'accepted_args' => 1 );
 
