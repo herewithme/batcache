@@ -72,13 +72,11 @@ class batcache_memcache extends batcache {
 	}
 
 	function set_cache( $key, $data, $group = '', $expire = 0 ) {
-		// TODO: Expire variable ?
-		return $this->memcache->set( $group.':'.$key, $data );
+		return $this->memcache->set( $group.':'.$key, $data, false, $expire );
 	}
 
 	function add_cache( $key, $data, $group = '', $expire = 0 ) {
-		// TODO: Expire variable ?
-		return $this->memcache->add( $group.':'.$key, $data );
+		return $this->memcache->add( $group.':'.$key, $data, false, $expire );
 	}
 
 	function incr_cache(  $key, $offset = 1, $group = '' ) {

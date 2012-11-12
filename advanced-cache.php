@@ -160,7 +160,14 @@ class batcache {
 global $batcache;
 
 switch( BATCACHE_INTERFACE ) {
+	case 'apc':
+		require( dirname(__FILE__) . '/batcache-interfaces/apc.php' );
+		$batcache = new batcache_apc($batcache);
+		break;
+	case 'memcache':
 	case 'memcached':
+		require( dirname(__FILE__) . '/batcache-interfaces/memcache.php' );
+		$batcache = new batcache_memcache($batcache);
 		break;
 	case 'wp-cache':
 	default :
